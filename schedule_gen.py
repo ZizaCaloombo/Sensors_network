@@ -2,20 +2,24 @@ import numpy as np
 import networkx as nx
 
 
-def rasp_create(adj_matrix, balance=False):
+def rasp_create(adj_matrix):
     """
     Функция для составления расписания передачи сообщений от передатчиков к Базовой Станции (БС) в случайно
     связанной сети.
     :param adj_matrix: Матрица смежности. лист листов с описанием связей графового представления системы.
-    :param balance: Бинарная опция включения/отключения балансировки
     :return: результат в формате расписания: [фрейм]
     """
-    result_way = []  # Список передач за фрейм
-    trans_num = len(adj_matrix)  # Число передатчиков
-    bs_buf = 0  # Количество сообщений на БС
+    result_way = []                                         # Список передач за фрейм
+    trans_num = len(adj_matrix)                             # Число передатчиков
+    bs_buf = 0                                              # Количество сообщений на БС
     graph = nx.from_numpy_matrix(np.matrix(adj_matrix))
-    if balance:
-        routes_p_node = np.zeros((trans_num,), dtype=np.int)
+    trans_routes = nx.shortest_path(graph, 0)               # Список маршрутов
+    routes_p_node = np.zeros((trans_num,), dtype=np.int)    # Число маршрутов через вершину
+    for node in trans_routes:
+        routes_p_node[trans_routes[node]] += 1
+    sort_routes = routes_p_node.argsort()
+    '''
+    routes_p_node = np.zeros((trans_num,), dtype=np.int)
         trans_routes = [[] for _ in range(trans_num)]
         for i in range(trans_num):
             trans_routes[i] = nx.shortest_path(graph, 0, i)
@@ -26,8 +30,7 @@ def rasp_create(adj_matrix, balance=False):
                     graph[j][e_num]['weight'] += routes_p_node[j] * trans_num ** -2
                     graph[e_num][j]['weight'] += routes_p_node[j] * trans_num ** -2
     else:
-        trans_routes = nx.shortest_path(graph, 0)
-
+    '''
     while bs_buf < trans_num - 1:  # Пока все заявки не попадут на БС,...
         cur_transmission = []  # Список передач за слот
         trans_lock = [False] * trans_num  # Список заблокированных для передачи передатчиков
@@ -35,7 +38,7 @@ def rasp_create(adj_matrix, balance=False):
 
         # В цикле исключена возможность передачи сообщения из БС (т.к. начинаем с 1)
         # Проходимся по сенсорам, проверяем возможность передачи и передаём
-        for i in range(1, trans_num):
+        for i in sort_routes:   # range(1, trans_num): # Замена на порядок с приоритетами
             # Проверка возможности передачи сообщения
             if len(trans_routes[i]) > 1:
                 source = trans_routes[i][-1]  # откуда передавать
@@ -60,6 +63,12 @@ def rasp_create(adj_matrix, balance=False):
                     trans_routes[i].pop()
                     if len(trans_routes[i]) == 1:
                         bs_buf += 1
+                    for k in range(1, trans_num):
+                        if k != i and len(trans_routes[k]) > 1 and trans_routes[k][-1] == source \
+                                        and receive == trans_routes[k][-2]:
+                            trans_routes[k].pop()
+                            if len(trans_routes[k]) == 1:
+                                bs_buf += 1
         result_way.append(cur_transmission)  # Добавления слота во фрейм
     return result_way  # , len(result_way)                          # Вывод результата в формате [фрейм], число_слотов
 
@@ -91,7 +100,7 @@ if __name__ == '__main__':
             
             '''))
             if method in [1, 2, 3]:
-                if method == 1 :
+                if method == 1:
                     N = int(input('Введите число сенсоров в сети: '))
                     adjacency_matrix = tree_generator(N)
                 elif method == 3:
@@ -117,10 +126,4 @@ if __name__ == '__main__':
     print("--- %s seconds ---" % (time.time() - start_time))
     print(schedule)
     print('Длина расписания равна {}'.format(len(schedule)))
-    start_time = time.time()
-    schedule1 = rasp_create(adjacency_matrix, balance=True)
-    print('Is valid? {}'.format(validate.validateFunc(adjacency_matrix, schedule1)))
-    print("--- %s seconds ---" % (time.time() - start_time))
-    print(schedule1)
-    print('Длина расписания равна {}'.format(len(schedule1)))
     show_graph(adjacency_matrix)
